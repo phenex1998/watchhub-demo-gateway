@@ -1,50 +1,36 @@
 // ============================================================================
-// Curated demo channels — free-to-air public/official streams only.
-// Used by the Google Play Store review process for VouAssistirTV.
-// All 4 streams validated HTTP 200 AND transmux-tested from Render (Oregon)
-// on 2026-04-24 (first byte <400ms, stable MPEG-TS output).
+// Live channels for the Xtream demo gateway.
 //
-// Policy rationale (for Play Store compliance):
-//   - Deutsche Welle (DW) is a German federal public broadcaster.
-//   - Red Bull TV is Red Bull GmbH's own free streaming channel.
-//   - Bloomberg TV+ is Bloomberg's official ad-supported free stream.
+// Policy: STRICTLY Public Domain or Creative Commons content only.
+// Every asset here is Blender Foundation short film, Creative Commons
+// Attribution 3.0 (CC BY 3.0). No commercial broadcaster, no copyrighted
+// material, no regional/rights-restricted content.
 //
-// No pirated, geo-restricted commercial, or Brazilian broadcast TV streams
-// are included. This list exists solely to let reviewers exercise the app's
-// IPTV client capabilities with content that has no rights restrictions.
-//
-// Several other candidates (NASA TV, DW English, France 24, DW Arabic/Polski
-// etc.) were evaluated but failed HLS sub-manifest fetches from the Render
-// datacenter (Akamai geo/IP filters). The 4 kept here probe cleanly.
+// Source notes:
+//   - NASA TV Public Channel was discontinued by NASA in 2024 in favor of
+//     NASA+ (proprietary streaming platform). The legacy Akamai endpoint
+//     still serves master.m3u8 but all sub-manifests return 404. iptv-org
+//     (largest public catalog) no longer lists an NASA TV live URL.
+//   - The Akamai CPH test stream proposed as a substitute has the same
+//     issue (master responds, sub-manifests 404).
+//   - livepush.io and unified-streaming.com host canonical CC BY samples
+//     used by the streaming industry for client testing. Validated
+//     end-to-end: master + all sub-variants + first segment return 200.
 // ============================================================================
 
 module.exports = [
   {
     id: 1,
-    name: "DW Deutsch",
-    category: "News",
-    url: "https://dwamdstream101.akamaized.net/hls/live/2015524/dwstream101/index.m3u8",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Deutsche_Welle_Logo.svg/256px-Deutsche_Welle_Logo.svg.png",
+    name: "Big Buck Bunny (Live)",
+    category: "Blender Open Movies (CC BY)",
+    url: "https://live-par-2-abr.livepush.io/vod/bigbuckbunny/playlist.m3u8",
+    logo: "https://archive.org/download/BigBuckBunny_124/__ia_thumb.jpg",
   },
   {
     id: 2,
-    name: "DW Espanol",
-    category: "News",
-    url: "https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/index.m3u8",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Deutsche_Welle_Logo.svg/256px-Deutsche_Welle_Logo.svg.png",
-  },
-  {
-    id: 3,
-    name: "Red Bull TV",
-    category: "Entertainment",
-    url: "https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8",
-    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/7/77/Red_Bull_Logo.svg/256px-Red_Bull_Logo.svg.png",
-  },
-  {
-    id: 4,
-    name: "Bloomberg TV",
-    category: "News",
-    url: "https://bloomberg.com/media-manifest/streams/us.m3u8",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/New_Bloomberg_Logo.svg/256px-New_Bloomberg_Logo.svg.png",
+    name: "Tears of Steel (Live)",
+    category: "Blender Open Movies (CC BY)",
+    url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
+    logo: "https://archive.org/download/tears-of-steel_202504/__ia_thumb.jpg",
   },
 ];
