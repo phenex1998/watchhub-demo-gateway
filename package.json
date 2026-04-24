@@ -1,0 +1,17 @@
+{
+  "name": "watchhub-demo-gateway",
+  "version": "1.0.0",
+  "description": "Minimal Xtream Codes gateway that exposes a curated list of free-to-air public broadcasters. Used as the review/demo credential for Google Play Store submission of VouAssistirTV.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "private": true,
+  "license": "UNLICENSED"
+}

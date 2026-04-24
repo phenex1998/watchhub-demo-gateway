@@ -1,0 +1,24 @@
+# Blueprint for Render.com -- 1-click deploy.
+# Usage:
+#   1. Push this repo to GitHub (see README).
+#   2. On Render: New -> Blueprint -> pick this repo.
+#   3. Render auto-detects render.yaml and provisions the service.
+#   4. After a few minutes, note the public URL (e.g. https://watchhub-demo-gateway.onrender.com).
+#   5. Paste that URL as the "dns" field when creating the Server in the admin panel.
+
+services:
+  - type: web
+    name: watchhub-demo-gateway
+    runtime: docker
+    plan: free                  # 512 MB RAM, spins down after 15 min idle (cold start ~30s).
+    region: oregon              # Change if closer to your reviewers (options: oregon, frankfurt, singapore).
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true            # Redeploy on every push to main.
+    envVars:
+      - key: DEMO_USER
+        value: demo
+      - key: DEMO_PASS
+        value: demo
+      - key: NODE_ENV
+        value: production
