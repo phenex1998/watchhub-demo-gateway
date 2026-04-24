@@ -20,6 +20,14 @@
 const express = require("express");
 const { spawn } = require("child_process");
 const CHANNELS = require("./channels");
+const {
+  MOVIES,
+  MOVIE_CATEGORIES,
+  SERIES,
+  SERIES_CATEGORIES,
+  findMovie,
+  findEpisode,
+} = require("./catalog");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -57,17 +65,65 @@ function liveStreamShape(channel) {
   };
 }
 
+function vodStreamShape(movie) {
+  return {
+    num: movie.stream_id,
+    name: movie.name,
+    stream_type: "movie",
+    stream_id: movie.stream_id,
+    stream_icon: movie.cover || "",
+    rating: movie.rating ?? "",
+    rating_5based: movie.rating ? Number(movie.rating) / 2 : 0,
+    added: String(nowUnix()),
+    category_id: movie.category_id,
+    container_extension: movie.container_extension,
+    custom_sid: "",
+    direct_source: "",
+  };
+}
+
+function seriesListShape(series) {
+  return {
+    num: series.series_id,
+    name: series.name,
+    series_id: series.series_id,
+    cover: series.cover || "",
+    plot: series.plot || "",
+    cast: "",
+    director: series.director || "",
+    genre: series.genre || "",
+    releaseDate: series.release_date || "",
+    last_modified: String(nowUnix()),
+    rating: series.rating ?? "",
+    rating_5based: series.rating ? Number(series.rating) / 2 : 0,
+    backdrop_path: [],
+    youtube_trailer: "",
+    episode_run_time: "15",
+    category_id: series.category_id,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Health endpoint (Render.com uses this)
 // ---------------------------------------------------------------------------
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, channels: CHANNELS.length, ts: nowUnix() });
+  res.json({
+    ok: true,
+    channels: CHANNELS.length,
+    movies: MOVIES.length,
+    series: SERIES.length,
+    ts: nowUnix(),
+  });
 });
 
 app.get("/", (_req, res) => {
   res.type("text/plain").send(
-    `watchhub-demo-gateway\nchannels: ${CHANNELS.length}\nhealthy: /health`,
+    `watchhub-demo-gateway\n` +
+      `channels: ${CHANNELS.length}\n` +
+      `movies: ${MOVIES.length}\n` +
+      `series: ${SERIES.length}\n` +
+      `healthy: /health`,
   );
 });
 
@@ -188,16 +244,117 @@ app.get("/player_api.php", (req, res) => {
       return res.json(list);
     }
 
-    // VOD and Series: empty — this gateway only serves live channels.
+    // VOD catalog (L27: CC BY content from Blender Foundation)
     case "get_vod_categories":
-    case "get_vod_streams":
-    case "get_series_categories":
-    case "get_series":
-      return res.json([]);
+      return res.json(MOVIE_CATEGORIES);
 
-    case "get_vod_info":
-    case "get_series_info":
-      return res.json({});
+    case "get_vod_streams": {
+      const catId = req.query.category_id;
+      const list = MOVIES.map(vodStreamShape);
+      if (catId && !MOVIES.some((m) => m.category_id === String(catId))) {
+        return res.json([]);
+      }
+      return res.json(
+        catId
+          ? list.filter((m) => m.category_id === String(catId))
+          : list,
+      );
+    }
+
+    case "get_vod_info": {
+      const id = Number(req.query.vod_id);
+      const m = findMovie(id);
+      if (!m) return res.json({});
+      return res.json({
+        info: {
+          movie_image: m.cover || "",
+          tmdb_id: "",
+          backdrop_path: [],
+          youtube_trailer: "",
+          genre: m.genre || "",
+          plot: m.plot || "",
+          cast: "",
+          rating: m.rating ?? "",
+          director: m.director || "",
+          releasedate: m.release_date || "",
+          duration: m.duration || "",
+          duration_secs: 0,
+        },
+        movie_data: {
+          stream_id: m.stream_id,
+          name: m.name,
+          added: String(nowUnix()),
+          category_id: m.category_id,
+          container_extension: m.container_extension,
+          custom_sid: "",
+          direct_source: "",
+        },
+      });
+    }
+
+    // Series catalog
+    case "get_series_categories":
+      return res.json(SERIES_CATEGORIES);
+
+    case "get_series": {
+      const catId = req.query.category_id;
+      const list = SERIES.map(seriesListShape);
+      return res.json(
+        catId
+          ? list.filter((s) => s.category_id === String(catId))
+          : list,
+      );
+    }
+
+    case "get_series_info": {
+      const sid = Number(req.query.series_id);
+      const s = SERIES.find((x) => x.series_id === sid);
+      if (!s) return res.json({});
+      // Xtream shape: { info, seasons, episodes: { "1": [{...}] } }
+      const episodesOut = {};
+      for (const seasonKey of Object.keys(s.episodes)) {
+        episodesOut[seasonKey] = s.episodes[seasonKey].map((ep) => ({
+          id: ep.id,
+          episode_num: ep.episode_num,
+          title: ep.title,
+          container_extension: ep.container_extension,
+          info: ep.info || {},
+          custom_sid: "",
+          added: String(nowUnix()),
+          season: ep.season,
+          direct_source: "",
+        }));
+      }
+      return res.json({
+        seasons: s.seasons.map((sn) => ({
+          air_date: s.release_date || "",
+          episode_count: sn.episode_count,
+          id: sn.season_number,
+          name: sn.name,
+          overview: sn.overview || "",
+          season_number: sn.season_number,
+          cover: sn.cover || s.cover || "",
+          cover_big: s.cover || "",
+        })),
+        info: {
+          name: s.name,
+          cover: s.cover || "",
+          plot: s.plot || "",
+          cast: "",
+          director: s.director || "",
+          genre: s.genre || "",
+          releaseDate: s.release_date || "",
+          last_modified: String(nowUnix()),
+          rating: s.rating ?? "",
+          rating_5based: s.rating ? Number(s.rating) / 2 : 0,
+          backdrop_path: [],
+          youtube_trailer: "",
+          episode_run_time: "15",
+          category_id: s.category_id,
+        },
+        episodes: episodesOut,
+      });
+    }
 
     // EPG endpoints: return empty arrays (the app handles missing EPG
     // gracefully — just shows "Sem programacao").
@@ -303,6 +460,38 @@ app.get("/live/:user/:pass/:streamId.ts", (req, res) => {
 
   req.on("close", () => cleanup("client closed"));
   res.on("close", () => cleanup("response closed"));
+});
+
+// ---------------------------------------------------------------------------
+// VOD endpoint -- MP4 direct from upstream (no transmux).
+// App URL pattern: /movie/{user}/{pass}/{streamId}.{ext}
+// ExoPlayer follows 302 redirects and reads MP4 via HTTP range requests.
+// ---------------------------------------------------------------------------
+
+app.get("/movie/:user/:pass/:file", (req, res) => {
+  if (!authOk(req)) return res.status(401).end();
+  // :file is "<id>.<ext>"; strip the extension to get the id
+  const id = Number(String(req.params.file).split(".")[0]);
+  const movie = findMovie(id);
+  if (!movie) return res.status(404).end();
+  console.log(`[movie] ${movie.name} (id=${id}) -> redirect to upstream`);
+  res.redirect(302, movie.upstream);
+});
+
+// ---------------------------------------------------------------------------
+// Series episode endpoint -- MP4 direct from upstream.
+// App URL pattern: /series/{user}/{pass}/{episodeId}.{ext}
+// ---------------------------------------------------------------------------
+
+app.get("/series/:user/:pass/:file", (req, res) => {
+  if (!authOk(req)) return res.status(401).end();
+  const id = Number(String(req.params.file).split(".")[0]);
+  const hit = findEpisode(id);
+  if (!hit) return res.status(404).end();
+  console.log(
+    `[episode] ${hit.series.name} S${hit.season}E${hit.episode.episode_num} (id=${id})`,
+  );
+  res.redirect(302, hit.episode.upstream);
 });
 
 // ---------------------------------------------------------------------------
