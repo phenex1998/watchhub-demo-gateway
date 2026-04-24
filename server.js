@@ -72,6 +72,63 @@ app.get("/", (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Debug endpoints -- remover em producao quando transmux estiver estavel
+// ---------------------------------------------------------------------------
+
+app.get("/debug/ffmpeg", (_req, res) => {
+  const ff = spawn("ffmpeg", ["-version"]);
+  let out = "";
+  ff.stdout.on("data", (b) => { out += b.toString(); });
+  ff.stderr.on("data", (b) => { out += b.toString(); });
+  ff.on("error", (err) => {
+    res.status(500).type("text/plain")
+      .send(`spawn error: ${err.code} ${err.message}\nffmpeg nao instalado?`);
+  });
+  ff.on("exit", (code) => {
+    res.type("text/plain").send(`exit=${code}\n${out.slice(0, 2000)}`);
+  });
+});
+
+app.get("/debug/probe/:id", (req, res) => {
+  const channel = CHANNELS.find((c) => c.id === Number(req.params.id));
+  if (!channel) return res.status(404).send("channel not found");
+
+  // Roda ffmpeg 5s contra o upstream e reporta stdout bytes + stderr.
+  const ff = spawn("ffmpeg", [
+    "-hide_banner", "-loglevel", "info",
+    "-user_agent", "VouAssistirTV-Demo/1.0",
+    "-i", channel.url,
+    "-t", "5",
+    "-c", "copy",
+    "-f", "mpegts",
+    "pipe:1",
+  ]);
+
+  let stdoutBytes = 0;
+  let stderr = "";
+  ff.stdout.on("data", (b) => { stdoutBytes += b.length; });
+  ff.stderr.on("data", (b) => { stderr += b.toString(); });
+  ff.on("error", (err) => {
+    res.status(500).json({ spawn_error: String(err) });
+  });
+  ff.on("exit", (code, signal) => {
+    res.json({
+      channel: channel.name,
+      upstream: channel.url,
+      ffmpeg_exit: code,
+      ffmpeg_signal: signal,
+      stdout_bytes: stdoutBytes,
+      stderr_tail: stderr.slice(-2000),
+    });
+  });
+
+  // Safety net -- 30s max
+  setTimeout(() => {
+    try { ff.kill("SIGKILL"); } catch { /* noop */ }
+  }, 30000);
+});
+
+// ---------------------------------------------------------------------------
 // Xtream Codes API
 // ---------------------------------------------------------------------------
 
@@ -184,29 +241,39 @@ app.get("/live/:user/:pass/:streamId.ts", (req, res) => {
   res.setHeader("Content-Type", "video/mp2t");
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Connection", "keep-alive");
+  // Flush headers IMEDIATAMENTE -- sem isso o Render/Cloudflare pode
+  // esperar o primeiro byte antes de enviar headers ao cliente, e se o
+  // ffmpeg demorar >30s pra primeiro byte o client abre timeout.
+  res.flushHeaders?.();
 
-  // Spawn ffmpeg. stdout -> response stream.
+  // Spawn ffmpeg. stdout -> response. Comando minimalista:
+  //   -re                   ler em tempo real (evita saturar CPU)
+  //   -c copy               zero transcoding (muito barato em CPU)
+  //   -f mpegts             container MPEG-TS
+  //   -reconnect*           aguenta reconnect do upstream sem morrer
   const ff = spawn(
     "ffmpeg",
     [
       "-hide_banner",
-      "-loglevel", "error",
+      "-loglevel", "warning",
       "-user_agent", "VouAssistirTV-Demo/1.0",
       "-reconnect", "1",
-      "-reconnect_at_eof", "1",
       "-reconnect_streamed", "1",
-      "-reconnect_delay_max", "5",
+      "-reconnect_delay_max", "4",
       "-i", channel.url,
-      "-map", "0:v:0?",
-      "-map", "0:a:0?",
       "-c", "copy",
       "-f", "mpegts",
-      "-muxdelay", "0",
-      "-flush_packets", "1",
       "pipe:1",
     ],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
+
+  // Log quando o primeiro byte sai -- ajuda diagnosticar cold starts lentos.
+  let firstByteLogged = false;
+  ff.stdout.once("data", () => {
+    console.log(`[stream] ${channel.name} first byte OK`);
+    firstByteLogged = true;
+  });
 
   let killed = false;
   const cleanup = (reason) => {
