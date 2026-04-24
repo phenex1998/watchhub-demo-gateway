@@ -10,8 +10,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-# Copy app source.
-COPY server.js channels.js ./
+# Copy app source. Use glob so adding new .js files (catalog.js, future modules)
+# doesn't silently break the build.
+COPY *.js ./
 
 # Render.com sets PORT dynamically; default to 3000 for local runs.
 ENV PORT=3000
